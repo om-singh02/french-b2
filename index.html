@@ -267,15 +267,17 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 <div id="pg-tracker" class="page"></div>
 <div id="pg-cards" class="page"></div>
 <div id="pg-tools" class="page"></div>
+<div id="pg-quiz" class="page"></div>
 <div id="pg-settings" class="page"></div>
 
 <!-- BOTTOM NAV -->
 <nav class="bnav">
   <button class="bn active" onclick="nav('home')" id="bn-home"><div class="bn-ic">🏠</div>Home</button>
   <button class="bn" onclick="nav('tracker')" id="bn-tracker"><div class="bn-ic">📅</div>Tracker</button>
-  <button class="bn" onclick="nav('cards')" id="bn-cards"><div class="bn-ic">🃏</div>Flashcards</button>
+  <button class="bn" onclick="nav('cards')" id="bn-cards"><div class="bn-ic">🃏</div>Cards</button>
+  <button class="bn" onclick="nav('quiz')" id="bn-quiz"><div class="bn-ic">🧠</div>Quiz</button>
   <button class="bn" onclick="nav('tools')" id="bn-tools"><div class="bn-ic">🛠</div>Tools</button>
-  <button class="bn" onclick="nav('settings')" id="bn-settings"><div class="bn-ic">⚙️</div>Settings</button>
+  <button class="bn" onclick="nav('settings')" id="bn-settings"><div class="bn-ic">⚙️</div>More</button>
 </nav>
 
 <!-- MODALS -->
@@ -307,6 +309,7 @@ const def={
   habits:{},
   gramNotes:{},
   journalEntries:[],
+  quizHistory:[],
   settings:{name:'Om',targetDate:'2027-01-31',dailyGoal:22.5}
 };
 Object.keys(def).forEach(k=>{if(S[k]===undefined)S[k]=def[k];});
@@ -497,7 +500,7 @@ function nav(id){
   document.getElementById('pg-'+id).classList.add('active');
   const bn=document.getElementById('bn-'+id);if(bn)bn.classList.add('active');
   curPage=id;
-  const r={home:rHome,tracker:rTracker,cards:rCards,tools:rTools,settings:rSettings};
+  const r={home:rHome,tracker:rTracker,cards:rCards,quiz:rQuiz,tools:rTools,settings:rSettings};
   if(r[id])r[id]();
 }
 
@@ -1264,6 +1267,396 @@ function resetAll(){
 // ADD TO HOME SCREEN PROMPT
 // ═══════════════════════════════════════════
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();window._a2hs=e;});
+
+// ═══════════════════════════════════════════
+// QUIZ MODULE
+// ═══════════════════════════════════════════
+
+const QUIZ_QUESTIONS = [
+  // ── WEEK 1 ──
+  {week:1,type:'mcq',q:"How do you say 'Good evening' in French?",opts:["Bonjour","Bonne nuit","Bonsoir","Salut"],ans:2,exp:"Bonsoir = good evening. Bonjour = good day. Bonne nuit = good night (going to sleep)."},
+  {week:1,type:'mcq',q:"What is 75 in French?",opts:["Soixante-cinq","Soixante-quinze","Septante-cinq","Quatre-vingt-cinq"],ans:1,exp:"75 = soixante-quinze (60+15). French counting gets creative after 60!"},
+  {week:1,type:'mcq',q:"'Merci beaucoup' means:",opts:["Please","Excuse me","Thank you very much","You're welcome"],ans:2,exp:"Merci = thank you. Beaucoup = a lot. So merci beaucoup = thank you very much."},
+  {week:1,type:'mcq',q:"What is 80 in French?",opts:["Huitante","Quatre-vingts","Soixante-vingt","Octante"],ans:1,exp:"80 = quatre-vingts (4×20). This is unique to French!"},
+  {week:1,type:'mcq',q:"'De rien' is the response to:",opts:["Bonjour","Bonsoir","Merci","Excusez-moi"],ans:2,exp:"De rien = you're welcome. Said in response to merci."},
+  {week:1,type:'translate',q:"Translate: 'Hello, my name is Om'",hint:"Bonjour + je m'appelle",ans:"Bonjour, je m'appelle Om.",exp:"Bonjour = hello. Je m'appelle = my name is (literally: I call myself)."},
+  {week:1,type:'translate',q:"Write the number 47 in French words",hint:"40 = quarante, 7 = sept",ans:"Quarante-sept",exp:"47 = quarante (40) + sept (7) = quarante-sept."},
+
+  // ── WEEK 2 ──
+  {week:2,type:'mcq',q:"What is the correct 'nous' form of être?",opts:["Sont","Êtes","Sommes","Suis"],ans:2,exp:"Être: je suis, tu es, il est, nous sommes, vous êtes, ils sont."},
+  {week:2,type:'mcq',q:"'J'ai faim' literally means:",opts:["I am hungry","I have hunger","I want food","I need food"],ans:1,exp:"Literally 'I have hunger' — French uses avoir (to have) for hunger, thirst, age, and pain."},
+  {week:2,type:'mcq',q:"Which is correct for 'I am 24 years old'?",opts:["Je suis 24 ans","J'ai 24 ans","Je fais 24 ans","J'aille 24 ans"],ans:1,exp:"Age in French uses avoir: j'ai 24 ans (I have 24 years). Never use être for age."},
+  {week:2,type:'mcq',q:"'Nous allons' means:",opts:["We went","We are going","You are going","They go"],ans:1,exp:"Aller: je vais, tu vas, il va, nous allons, vous allez, ils vont."},
+  {week:2,type:'mcq',q:"What does 'faire' mean?",opts:["To be","To have","To go","To do / make"],ans:3,exp:"Faire = to do AND to make. One of the most versatile French verbs."},
+  {week:2,type:'translate',q:"Translate: 'I am a data analyst'",hint:"Use être. No article before profession.",ans:"Je suis analyste de données.",exp:"After être + profession, no article. Je suis analyste (not: je suis UN analyste)."},
+  {week:2,type:'translate',q:"Translate: 'She has two brothers'",hint:"avoir + frères",ans:"Elle a deux frères.",exp:"Avoir = to have for possession. Elle a = she has."},
+
+  // ── WEEK 3 ──
+  {week:3,type:'mcq',q:"How do you make 'Je parle français' negative?",opts:["Je ne parle pas français","Je parle no français","Je ne français parle","Je pas parle français"],ans:0,exp:"Negation wraps the verb: ne...pas. Je ne parle pas français. In spoken French, 'ne' is often dropped."},
+  {week:3,type:'mcq',q:"What does 'Pourquoi' mean?",opts:["Where","When","Why","How"],ans:2,exp:"Question words: qui=who, quoi=what, où=where, quand=when, pourquoi=why, comment=how, combien=how much."},
+  {week:3,type:'mcq',q:"'Je n'ai pas ___ argent' — which word?",opts:["de","du","des","un"],ans:0,exp:"After negation, articles change to 'de/d'': Je n'ai pas d'argent. This is a key rule!"},
+  {week:3,type:'mcq',q:"'Quelle heure est-il?' means:",opts:["What's the weather?","What time is it?","What day is it?","How long?"],ans:1,exp:"Quelle heure est-il? = what time is it? Quel temps fait-il? = what's the weather?"},
+  {week:3,type:'mcq',q:"How do you say 'I never eat meat'?",opts:["Je ne mange jamais de viande","Je mange pas viande","Je ne mange pas jamais viande","Je jamais mange viande"],ans:0,exp:"Ne...jamais = never. Je ne mange jamais de viande. Note: de (not du) after negation."},
+  {week:3,type:'translate',q:"Translate: 'I don't understand'",hint:"ne...pas + comprendre",ans:"Je ne comprends pas.",exp:"Je ne comprends pas. Very useful phrase — use it freely!"},
+  {week:3,type:'translate',q:"Translate: 'Why are you learning French?' (informal)",hint:"pourquoi + apprendre",ans:"Pourquoi tu apprends le français?",exp:"Pourquoi = why. Tu apprends = you learn (informal). Le français = French."},
+
+  // ── WEEK 4 ──
+  {week:4,type:'mcq',q:"What is the passé composé of 'manger' for 'je'?",opts:["J'ai mangé","Je mange","Je mangeais","J'ai manger"],ans:0,exp:"Passé composé = avoir/être + past participle. Manger → mangé. J'ai mangé = I ate."},
+  {week:4,type:'mcq',q:"Which verb uses 'être' in passé composé?",opts:["Travailler","Parler","Aller","Manger"],ans:2,exp:"Aller uses être: je suis allé(e). Dr Mrs Vandertramp verbs all use être."},
+  {week:4,type:'mcq',q:"Past participle of 'voir'?",opts:["Voyé","Vu","Voir","Vécu"],ans:1,exp:"Voir → vu. Key irregulars: faire→fait, voir→vu, prendre→pris, être→été, avoir→eu."},
+  {week:4,type:'mcq',q:"'Elle ___ partie hier' — which word?",opts:["a","est","avait","avoir"],ans:1,exp:"Partir uses être: elle est partie. Note the extra 'e' because she is feminine."},
+  {week:4,type:'mcq',q:"What does 'hier' mean?",opts:["Here","Yesterday","Early","Later"],ans:1,exp:"Hier = yesterday. Aujourd'hui = today. Demain = tomorrow."},
+  {week:4,type:'translate',q:"Translate: 'I went to the store yesterday'",hint:"aller → allé(e), uses être",ans:"Je suis allé(e) au magasin hier.",exp:"Aller uses être. Add -e if you're a woman: je suis allée."},
+  {week:4,type:'translate',q:"Past participle of 'prendre'?",hint:"Irregular",ans:"Pris",exp:"Prendre → pris. J'ai pris le métro = I took the metro."},
+
+  // ── WEEK 5 ──
+  {week:5,type:'mcq',q:"'Les données' means:",opts:["The notes","The data","The dates","The files"],ans:1,exp:"Les données = the data. J'analyse les données = I analyse the data. Essential word for a data analyst!"},
+  {week:5,type:'mcq',q:"'Il fait chaud' means:",opts:["He is warm","It is hot","It makes heat","It is cold"],ans:1,exp:"Il fait chaud = it is hot. Weather expressions use 'faire': il fait froid (cold), il fait beau (nice)."},
+  {week:5,type:'mcq',q:"How do you say 'a meeting' in French?",opts:["Un rapport","Un bureau","Une réunion","Un rendez-vous"],ans:2,exp:"Une réunion = a meeting. Un rendez-vous = an appointment. Un bureau = an office/desk."},
+  {week:5,type:'mcq',q:"'J'ai mal à la tête' means:",opts:["I have a cold","I have a headache","I am tired","I am sick"],ans:1,exp:"J'ai mal à la tête = I have a headache. J'ai mal au dos = back pain. J'ai mal à la gorge = sore throat."},
+  {week:5,type:'translate',q:"Translate: 'I take the metro every day'",hint:"prendre + métro + chaque jour",ans:"Je prends le métro chaque jour.",exp:"Prendre = to take. Je prends = I take. Chaque jour = every day."},
+
+  // ── WEEK 6 ──
+  {week:6,type:'mcq',q:"'Je vais étudier ce soir' uses which tense?",opts:["Futur simple","Futur proche","Conditionnel","Présent"],ans:1,exp:"Futur proche = aller + infinitive. Je vais étudier = I am going to study. Most common future in spoken French."},
+  {week:6,type:'mcq',q:"'Je voudrais' is the polite form of:",opts:["Je veux","Je dois","Je peux","Je vais"],ans:0,exp:"Je voudrais (I would like) is the polite conditional of vouloir (to want). Always use this when ordering."},
+  {week:6,type:'mcq',q:"Futur simple of 'être' for 'je'?",opts:["Je serai","Je suis","J'étais","Je serais"],ans:0,exp:"Être → irregular stem: ser-. Je serai = I will be. Je serais = I would be (conditional)."},
+  {week:6,type:'mcq',q:"'Si je travaille bien, j'aurai une promotion' — what type of sentence?",opts:["Hypothetical (impossible)","Real condition (possible)","Past condition","Wish"],ans:1,exp:"Si + présent + futur = real possibility. Si + imparfait + conditionnel = hypothetical."},
+  {week:6,type:'translate',q:"Translate: 'I am going to study French tonight'",hint:"futur proche: aller + infinitive",ans:"Je vais étudier le français ce soir.",exp:"Je vais (I am going to) + étudier (study) + ce soir (tonight)."},
+
+  // ── WEEK 7 ──
+  {week:7,type:'mcq',q:"'Du coup' in spoken French means:",opts:["Of the blow","So / as a result","Of course","Right away"],ans:1,exp:"Du coup is a very common spoken filler meaning 'so' or 'as a result'. Du coup, j'ai décidé... = So I decided..."},
+  {week:7,type:'mcq',q:"Which is a French filler word?",opts:["Donc","Enfin","Alors","All of these"],ans:3,exp:"All three are common fillers: donc (so), enfin (well/finally), alors (so/well). Use them to sound natural!"},
+  {week:7,type:'mcq',q:"'En fait' means:",opts:["In the end","Actually / in fact","For example","On the other hand"],ans:1,exp:"En fait = actually / in fact. En fait, j'ai changé d'avis = Actually, I changed my mind."},
+  {week:7,type:'translate',q:"Use 'du coup' in a sentence about learning French",hint:"du coup = so / as a result",ans:"Du coup, j'apprends le français chaque jour.",exp:"Du coup makes your French sound natural and native. Use it often in conversation."},
+
+  // ── WEEKS 8-10 (A2) ──
+  {week:8,type:'mcq',q:"Imparfait ending for 'je/il'?",opts:["-ais / -ait","-ai / -a","-e / -es","-ais / -ait"],ans:0,exp:"Imparfait endings: je/tu -ais, il/elle -ait, nous -ions, vous -iez, ils -aient. Use for background and habits."},
+  {week:8,type:'mcq',q:"'Il pleuvait quand je suis sorti' — which tense is 'pleuvait'?",opts:["Passé composé","Imparfait","Futur simple","Présent"],ans:1,exp:"Imparfait = background/ongoing state. Passé composé = specific event. It was raining (background) when I went out (event)."},
+  {week:9,type:'mcq',q:"Reflexive verb 'se lever' for 'je'?",opts:["Je lève","Je me lève","Je se lève","Je me lever"],ans:1,exp:"Reflexive verbs: je me lève, tu te lèves, il se lève, nous nous levons, vous vous levez, ils se lèvent."},
+  {week:9,type:'mcq',q:"'Je me suis levé' is which tense?",opts:["Présent","Imparfait","Passé composé","Futur"],ans:2,exp:"Reflexive verbs use être in passé composé: je me suis levé(e). The past participle agrees with subject."},
+  {week:10,type:'translate',q:"Translate: 'When I was young, I played football every day'",hint:"imparfait for both — quand j'étais, je jouais",ans:"Quand j'étais jeune, je jouais au football chaque jour.",exp:"Both use imparfait: ongoing background state (young) + repeated habit (played every day)."},
+
+  // ── WEEKS 11-15 (B1) ──
+  {week:11,type:'mcq',q:"Subjunctive after which expression?",opts:["Je pense que","Il est certain que","Il faut que","Je sais que"],ans:2,exp:"Il faut que + subjunctive. Also: je veux que, bien que, pour que, à moins que. Certainty (je sais que) uses indicative."},
+  {week:11,type:'mcq',q:"Which connects two clauses as a relative pronoun (subject)?",opts:["Que","Dont","Qui","Où"],ans:2,exp:"Qui = who/that (subject of clause). L'homme qui parle. Que = object. Le livre que je lis."},
+  {week:12,type:'mcq',q:"'Si j'avais de l'argent, je voyagerais' — what type?",opts:["Real condition","Hypothetical condition","Past condition","Future plan"],ans:1,exp:"Si + imparfait → conditionnel = hypothetical (not real). Si + présent → futur = real possibility."},
+  {week:12,type:'mcq',q:"'Le sujet ___ je parle' — which pronoun?",opts:["qui","que","dont","où"],ans:2,exp:"Dont = of which / about which. Je parle du sujet → le sujet dont je parle. Used after verbs/nouns with 'de'."},
+  {week:13,type:'mcq',q:"Linking word for 'however'?",opts:["En effet","Cependant","Par conséquent","D'une part"],ans:1,exp:"Cependant = however. Also: néanmoins, pourtant. En effet = indeed. Par conséquent = as a result."},
+  {week:14,type:'mcq',q:"'D'une part... d'autre part' means:",opts:["First... second","On one hand... on the other","Partly... mostly","Above all... below"],ans:1,exp:"D'une part... d'autre part = on one hand... on the other hand. Essential for TEF essays."},
+  {week:15,type:'mcq',q:"TEF essay structure is:",opts:["Introduction → body → conclusion","Thèse → antithèse → synthèse","Problem → solution → opinion","Story → argument → example"],ans:1,exp:"French essay structure: thèse (argument for) → antithèse (argument against) → synthèse (nuanced conclusion)."},
+  {week:15,type:'translate',q:"Use 'certes... cependant' in a sentence",hint:"certes = admittedly, cependant = however",ans:"Certes, c'est difficile; cependant, c'est possible.",exp:"Certes concedes a point, cependant introduces the counter. Classic TEF essay pattern."},
+
+  // ── WEEKS 16-20 (B1+) ──
+  {week:16,type:'mcq',q:"Subjunctive of 'être' for 'il'?",opts:["Est","Soit","Serait","Était"],ans:1,exp:"Subjunctive of être: je sois, tu sois, il soit, nous soyons, vous soyez, ils soient. Very irregular."},
+  {week:16,type:'mcq',q:"'Bien que' requires which mood?",opts:["Indicatif","Conditionnel","Subjonctif","Infinitif"],ans:2,exp:"Bien que (although) always triggers subjunctive. Bien que ce soit difficile = although it is difficult."},
+  {week:17,type:'mcq',q:"'Souligner' means:",opts:["To underline / highlight","To summarize","To argue","To explain"],ans:0,exp:"Souligner = to underline / to highlight / to emphasize. Il faut souligner l'importance de ce problème."},
+  {week:18,type:'mcq',q:"'Le réchauffement climatique' means:",opts:["Climate change","Global warming","Carbon footprint","Renewable energy"],ans:1,exp:"Le réchauffement climatique = global warming (literally: climatic warming). Key TEF environment vocabulary."},
+  {week:18,type:'mcq',q:"'Le chômage' means:",opts:["Work","Salary","Unemployment","Strike"],ans:2,exp:"Le chômage = unemployment. Le taux de chômage = unemployment rate. Key TEF society vocabulary."},
+  {week:19,type:'mcq',q:"TEF reading section tests:",opts:["Only vocabulary","Grammar rules","Comprehension of long texts","Speaking ability"],ans:2,exp:"TEF reading = compréhension des écrits. Tests understanding of long articles, inference, and implicit meaning."},
+  {week:20,type:'translate',q:"Translate: 'On the one hand renewable energies are essential, on the other hand they are expensive'",hint:"d'une part... d'autre part",ans:"D'une part, les énergies renouvelables sont essentielles; d'autre part, elles sont coûteuses.",exp:"Perfect TEF essay sentence. Both sides of the argument in one balanced sentence."},
+
+  // ── WEEKS 21-28 (B2) ──
+  {week:21,type:'mcq',q:"TEF synthesis (synthèse) requires:",opts:["Your opinion on the topic","A summary of the document without your opinion","A letter to the editor","A description of an image"],ans:1,exp:"TEF synthesis = summarize the document objectively. NO personal opinion. Save opinion for the expression écrite opinion section."},
+  {week:21,type:'mcq',q:"'Mettre en évidence' means:",opts:["To put in evidence (legal)","To highlight / bring to light","To make visible","To prove"],ans:1,exp:"Mettre en évidence = to highlight, to bring to light, to demonstrate. Cette étude met en évidence les risques."},
+  {week:22,type:'mcq',q:"TEF opinion essay word count target?",opts:["100 words","150 words","300 words","500 words"],ans:1,exp:"TEF opinion essay (expression d'un point de vue) = approximately 150 words. Synthesis = approximately 200 words."},
+  {week:23,type:'mcq',q:"TEF oral monologue: how long is the preparation time?",opts:["1 minute","3 minutes","5 minutes","10 minutes"],ans:1,exp:"TEF oral: 3 minutes preparation → 2 minute monologue → 3 minute discussion with examiner."},
+  {week:24,type:'mcq',q:"TEF score band for B2?",opts:["4–5 out of 12","6–7 out of 12","8–9 out of 12","10–11 out of 12"],ans:2,exp:"TEF score bands: A1(0-3), A2(4-5), B1(6-7), B2(8-9), C1(10-11), C2(12). You need 8+ for B2."},
+  {week:25,type:'mcq',q:"Passive voice: 'The report was written by the team' in French?",opts:["Le rapport a écrit l'équipe","L'équipe a écrit le rapport","Le rapport a été rédigé par l'équipe","Le rapport était rédigé l'équipe"],ans:2,exp:"Passive = être + past participle. Le rapport a été rédigé par l'équipe. Participle agrees with subject (rapport = masc)."},
+  {week:26,type:'mcq',q:"'Néanmoins' means:",opts:["Furthermore","Nevertheless","Therefore","Indeed"],ans:1,exp:"Néanmoins = nevertheless / however. C'est difficile; néanmoins, c'est possible. Similar to cependant but more formal."},
+  {week:27,type:'mcq',q:"Past subjunctive: 'although he said it' in French?",opts:["Bien qu'il a dit","Bien qu'il disait","Bien qu'il ait dit","Bien qu'il dit"],ans:2,exp:"Past subjunctive = avoir/être subjunctive + past participle. Bien qu'il ait dit = although he said / has said."},
+  {week:28,type:'mcq',q:"TEF listening tests which skill LEAST?",opts:["Understanding main idea","Identifying speaker opinion","Translating word for word","Inferring implicit meaning"],ans:2,exp:"TEF listening does NOT test word-for-word translation. It tests main ideas, inference, attitude, and purpose."},
+
+  // ── TEF PRACTICE ──
+  {week:30,type:'mcq',q:"In TEF writing, a good synthesis starts with:",opts:["My opinion on the topic","Le document traite de... / Ce texte aborde...","Once upon a time...","In conclusion..."],ans:1,exp:"TEF synthesis opening: 'Le document traite de...' or 'Ce texte aborde la question de...' — neutral, objective, no opinion."},
+  {week:32,type:'mcq',q:"'Par conséquent' means:",opts:["However","On the other hand","As a result / consequently","Indeed"],ans:2,exp:"Par conséquent = as a result / consequently. Par conséquent, nous devons agir = as a result, we must act."},
+  {week:33,type:'mcq',q:"'En effet' means:",opts:["In fact / indeed","In effect (legal)","As a result","For example"],ans:0,exp:"En effet = indeed / in fact (confirms what was just said). En effet, les résultats sont positifs = Indeed, the results are positive."},
+  {week:34,type:'mcq',q:"'Certes' is used to:",opts:["Strongly agree","Concede a point before disagreeing","Change the subject","Conclude an argument"],ans:1,exp:"Certes = admittedly. It concedes something before introducing a counter. Certes, c'est coûteux, cependant... = Admittedly it's expensive, however..."},
+  {week:35,type:'translate',q:"Write a TEF opinion sentence: 'Although renewable energies are expensive, they are essential for the future'",hint:"bien que + subjonctif",ans:"Bien que les énergies renouvelables soient coûteuses, elles sont essentielles pour l'avenir.",exp:"Bien que = although → subjunctive (soient). A perfect B2 sentence structure."},
+  {week:36,type:'translate',q:"Write: 'This study highlights the importance of public health'",hint:"mettre en évidence / souligner",ans:"Cette étude met en évidence l'importance de la santé publique.",exp:"Met en évidence = highlights. Alternatively: Cette étude souligne l'importance de..."},
+];
+
+// ── QUIZ STATE ─────────────────────────────
+let QS = {
+  mode: 'home',       // home | session | result
+  filter: 'all',      // all | week | phase
+  filterVal: null,
+  questions: [],
+  idx: 0,
+  answered: false,
+  selected: null,
+  typed: '',
+  results: { correct:0, wrong:0, skipped:0 },
+  history: [],        // saved in S.quizHistory
+};
+
+if (!S.quizHistory) S.quizHistory = [];
+
+function rQuiz() {
+  QS.mode = 'home';
+  renderQuizHome();
+}
+
+function renderQuizHome() {
+  const total = QUIZ_QUESTIONS.length;
+  const done = S.quizHistory.length;
+  const correct = S.quizHistory.filter(h=>h.correct).length;
+  const accuracy = done ? Math.round(correct/done*100) : 0;
+  const cw = curWeek();
+  const weekQs = QUIZ_QUESTIONS.filter(q=>q.week<=cw).length;
+
+  // Best week scores
+  const weekScores = {};
+  S.quizHistory.forEach(h=>{
+    if(!weekScores[h.week])weekScores[h.week]={correct:0,total:0};
+    weekScores[h.week].total++;
+    if(h.correct)weekScores[h.week].correct++;
+  });
+
+  const pg = document.getElementById('pg-quiz');
+  pg.innerHTML = `
+    <div style="background:var(--bg2);border-bottom:1px solid var(--border);padding:12px 16px;margin:-16px -16px 16px;">
+      <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;">🧠 Quiz Yourself</div>
+      <div style="font-size:11px;color:var(--text2);">Test your French knowledge — ${weekQs} questions unlocked</div>
+    </div>
+
+    <div class="sgrid s4" style="margin-bottom:16px;">
+      <div class="sc"><div class="sv" style="color:var(--green)">${correct}</div><div class="sl">Correct</div></div>
+      <div class="sc"><div class="sv" style="color:var(--rose)">${done-correct}</div><div class="sl">Wrong</div></div>
+      <div class="sc"><div class="sv" style="color:var(--blue)">${accuracy}%</div><div class="sl">Accuracy</div></div>
+      <div class="sc"><div class="sv" style="color:var(--amber)">${done}</div><div class="sl">Answered</div></div>
+    </div>
+
+    <button class="btn-g btn-full" style="margin-bottom:8px;" onclick="startQuiz('all')">🎯 Quiz All Unlocked (${weekQs} Qs)</button>
+    <button class="btn-s btn-full" style="margin-bottom:16px;" onclick="startQuiz('wrong')">❌ Re-quiz Wrong Answers (${S.quizHistory.filter(h=>!h.correct).length})</button>
+
+    <div class="sec">Quiz by week</div>
+    <div style="display:grid;gap:6px;">
+      ${[...new Set(QUIZ_QUESTIONS.map(q=>q.week))].sort((a,b)=>a-b).map(w=>{
+        const qs=QUIZ_QUESTIONS.filter(q=>q.week===w);
+        const wh=S.quizHistory.filter(h=>h.week===w);
+        const wCorrect=wh.filter(h=>h.correct).length;
+        const wPct=wh.length?Math.round(wCorrect/wh.length*100):null;
+        const locked=w>cw+1;
+        const wk=WEEKS.find(x=>x.w===w);
+        return`<div style="background:var(--bg2);border:1px solid ${locked?'var(--border)':wPct>=80?'var(--green-br)':wPct!==null?'var(--amber-br)':'var(--border)'};border-radius:10px;padding:11px 14px;display:flex;align-items:center;gap:10px;${locked?'opacity:0.4;':'cursor:pointer;'}" ${!locked?`onclick="startQuiz('week',${w})"`:''}">
+          <div style="width:30px;height:30px;border-radius:7px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-size:12px;font-weight:800;color:var(--text2);flex-shrink:0;">${locked?'🔒':w}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;color:var(--text);">Week ${w}${wk?' — '+wk.title:''}</div>
+            <div style="font-size:10px;color:var(--text3);">${qs.length} questions${wPct!==null?' · '+wPct+'% accuracy':''}</div>
+          </div>
+          ${wPct!==null?`<div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:${wPct>=80?'var(--green)':'var(--amber)'};">${wPct}%</div>`:'<div style="font-size:11px;color:var(--text3);">Start →</div>'}
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function startQuiz(mode, val=null) {
+  let questions = [];
+  const cw = curWeek();
+
+  if (mode === 'all') {
+    questions = QUIZ_QUESTIONS.filter(q=>q.week<=cw+1);
+  } else if (mode === 'week') {
+    questions = QUIZ_QUESTIONS.filter(q=>q.week===val);
+  } else if (mode === 'wrong') {
+    const wrongIds = S.quizHistory.filter(h=>!h.correct).map(h=>h.qid);
+    questions = QUIZ_QUESTIONS.filter((q,i)=>wrongIds.includes(i));
+    if(!questions.length){alert('No wrong answers yet — keep quizzing!');return;}
+  }
+
+  if (!questions.length) { alert('No questions available for this selection.'); return; }
+
+  // Shuffle
+  questions = [...questions].sort(()=>Math.random()-0.5);
+
+  QS = { mode:'session', filter:mode, filterVal:val, questions, idx:0, answered:false, selected:null, typed:'', results:{correct:0,wrong:0,skipped:0}, history:[] };
+  renderQuizQuestion();
+}
+
+function renderQuizQuestion() {
+  const pg = document.getElementById('pg-quiz');
+  if (QS.idx >= QS.questions.length) { renderQuizResult(); return; }
+
+  const q = QS.questions[QS.idx];
+  const pct = Math.round(QS.idx / QS.questions.length * 100);
+
+  pg.innerHTML = `
+    <div style="padding:12px 0 0;">
+      <!-- Progress -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding:0 0 0 0;">
+        <button style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:4px;" onclick="rQuiz()">✕ Exit</button>
+        <span style="font-size:11px;color:var(--text3);">${QS.idx+1} / ${QS.questions.length}</span>
+        <span style="font-size:11px;"><span style="color:var(--green)">✓${QS.results.correct}</span> <span style="color:var(--rose)">✗${QS.results.wrong}</span></span>
+      </div>
+      <div class="pb-bg" style="margin-bottom:16px;"><div class="pb-f" style="width:${pct}%"></div></div>
+
+      <!-- Week tag -->
+      <div style="margin-bottom:10px;">
+        <span style="font-size:10px;padding:3px 9px;border-radius:20px;background:var(--blue-bg);color:var(--blue);font-weight:700;">Week ${q.week}</span>
+        <span style="font-size:10px;padding:3px 9px;border-radius:20px;background:var(--bg3);color:var(--text3);margin-left:4px;">${q.type==='mcq'?'Multiple choice':'Translation'}</span>
+      </div>
+
+      <!-- Question -->
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px;">
+        <div style="font-family:'Lora',serif;font-size:17px;color:var(--text);line-height:1.5;margin-bottom:${q.hint?'8px':'0'}">${q.q}</div>
+        ${q.hint?`<div style="font-size:11px;color:var(--text3);font-style:italic;">Hint: ${q.hint}</div>`:''}
+      </div>
+
+      <!-- Answer area -->
+      <div id="quiz-answer-area">
+        ${q.type==='mcq' ? renderMCQOptions(q) : renderTranslateInput(q)}
+      </div>
+
+      <!-- Explanation (hidden until answered) -->
+      <div id="quiz-explanation" style="display:none;"></div>
+
+      <!-- Next button (hidden until answered) -->
+      <div id="quiz-next" style="display:none;margin-top:12px;">
+        <button class="btn-g btn-full" onclick="nextQuestion()">${QS.idx+1 < QS.questions.length ? 'Next Question →' : 'See Results →'}</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderMCQOptions(q) {
+  return `<div style="display:grid;gap:8px;">
+    ${q.opts.map((opt,i)=>`
+      <button id="opt-${i}" onclick="answerMCQ(${i})" style="width:100%;text-align:left;padding:12px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;line-height:1.4;transition:all 0.15s;">
+        <span style="font-family:'Syne',sans-serif;font-weight:800;margin-right:8px;color:var(--text3);">${['A','B','C','D'][i]}</span>${opt}
+      </button>
+    `).join('')}
+  </div>`;
+}
+
+function renderTranslateInput(q) {
+  return `<div>
+    <textarea id="translate-inp" class="fta" style="min-height:80px;margin-bottom:8px;" placeholder="Type your answer in French..." oninput="QS.typed=this.value"></textarea>
+    <button class="btn-g btn-full" onclick="checkTranslate()">Check Answer</button>
+  </div>`;
+}
+
+function answerMCQ(chosen) {
+  if (QS.answered) return;
+  QS.answered = true;
+  const q = QS.questions[QS.idx];
+  const correct = chosen === q.ans;
+
+  // Style buttons
+  q.opts.forEach((_,i)=>{
+    const btn=document.getElementById('opt-'+i);
+    if(!btn)return;
+    btn.disabled=true;
+    if(i===q.ans) btn.style.cssText+=';background:var(--green-bg);border-color:var(--green-br);color:var(--green);';
+    else if(i===chosen&&!correct) btn.style.cssText+=';background:var(--rose-bg);border-color:var(--rose-br);color:var(--rose);';
+    else btn.style.opacity='0.4';
+  });
+
+  logAnswer(correct, q);
+  showExplanation(correct, q);
+}
+
+function checkTranslate() {
+  if (QS.answered) return;
+  QS.answered = true;
+  const q = QS.questions[QS.idx];
+  // For translation, we show model answer and let user self-assess
+  const inp = document.getElementById('translate-inp');
+  if(inp) inp.disabled=true;
+
+  const area = document.getElementById('quiz-answer-area');
+  if(area){
+    area.innerHTML += `<div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:12px;">
+      <div style="color:var(--text3);margin-bottom:3px;">Your answer:</div>
+      <div style="color:var(--text);font-style:italic;">${QS.typed||'(blank)'}</div>
+    </div>
+    <div style="background:var(--green-bg);border:1px solid var(--green-br);border-radius:8px;padding:10px 12px;margin-top:6px;font-size:12px;">
+      <div style="color:var(--text3);margin-bottom:3px;">Model answer:</div>
+      <div style="color:var(--green);font-weight:600;">${q.ans}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+      <button onclick="selfMark(true)" style="padding:10px;background:var(--green-bg);border:1px solid var(--green-br);border-radius:8px;color:var(--green);font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;font-size:12px;">✓ Got it right</button>
+      <button onclick="selfMark(false)" style="padding:10px;background:var(--rose-bg);border:1px solid var(--rose-br);border-radius:8px;color:var(--rose);font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;font-size:12px;">✗ Got it wrong</button>
+    </div>`;
+  }
+
+  const expDiv = document.getElementById('quiz-explanation');
+  if(expDiv){
+    expDiv.style.display='block';
+    expDiv.innerHTML=`<div style="background:var(--bg3);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:12px;color:var(--text2);line-height:1.6;">💡 ${q.exp}</div>`;
+  }
+}
+
+function selfMark(correct) {
+  const q = QS.questions[QS.idx];
+  // Remove the self-mark buttons
+  const btns = document.querySelectorAll('[onclick^="selfMark"]');
+  btns.forEach(b=>b.remove());
+  logAnswer(correct, q);
+  const nextDiv = document.getElementById('quiz-next');
+  if(nextDiv) nextDiv.style.display='block';
+}
+
+function logAnswer(correct, q) {
+  if(correct) QS.results.correct++;
+  else QS.results.wrong++;
+  const qIdx = QUIZ_QUESTIONS.indexOf(q);
+  S.quizHistory.push({ qid:qIdx, week:q.week, correct, ts:Date.now() });
+  // Keep last 500 answers
+  if(S.quizHistory.length>500) S.quizHistory=S.quizHistory.slice(-500);
+  sv();
+  if(q.type==='mcq') showExplanation(correct, q);
+}
+
+function showExplanation(correct, q) {
+  const expDiv = document.getElementById('quiz-explanation');
+  if(expDiv){
+    expDiv.style.display='block';
+    expDiv.innerHTML=`
+      <div style="background:${correct?'var(--green-bg)':'var(--rose-bg)'};border:1px solid ${correct?'var(--green-br)':'var(--rose-br)'};border-radius:10px;padding:12px 14px;margin-top:10px;">
+        <div style="font-family:'Syne',sans-serif;font-weight:800;color:${correct?'var(--green)':'var(--rose)'};margin-bottom:4px;">${correct?'✓ Correct!':'✗ Not quite'}</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.6;">${q.exp}</div>
+      </div>`;
+  }
+  const nextDiv = document.getElementById('quiz-next');
+  if(nextDiv) nextDiv.style.display='block';
+}
+
+function nextQuestion() {
+  QS.idx++;
+  QS.answered=false;
+  QS.selected=null;
+  QS.typed='';
+  renderQuizQuestion();
+}
+
+function renderQuizResult() {
+  const pg = document.getElementById('pg-quiz');
+  const total = QS.questions.length;
+  const correct = QS.results.correct;
+  const pct = Math.round(correct/total*100);
+  const grade = pct>=90?['🏆','Excellent!','You know this material cold.']:pct>=70?['🎉','Great work!','Strong understanding — review the ones you missed.']:pct>=50?['💪','Good effort','Keep practicing — re-quiz the wrong answers.']:['📚','Keep going','Review this week\'s content and try again.'];
+
+  pg.innerHTML=`
+    <div style="text-align:center;padding:30px 16px 20px;">
+      <div style="font-size:52px;margin-bottom:10px;">${grade[0]}</div>
+      <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;margin-bottom:4px;">${grade[1]}</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:20px;">${grade[2]}</div>
+      <div style="font-family:'Syne',sans-serif;font-size:52px;font-weight:800;color:${pct>=70?'var(--green)':pct>=50?'var(--amber)':'var(--rose)'};">${pct}%</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:20px;">${correct} / ${total} correct</div>
+    </div>
+    <div class="sgrid" style="margin-bottom:20px;">
+      <div class="sc"><div class="sv" style="color:var(--green)">${correct}</div><div class="sl">Correct</div></div>
+      <div class="sc"><div class="sv" style="color:var(--rose)">${QS.results.wrong}</div><div class="sl">Wrong</div></div>
+      <div class="sc"><div class="sv" style="color:var(--blue)">${total}</div><div class="sl">Total</div></div>
+    </div>
+    <div class="btn-row" style="flex-direction:column;">
+      <button class="btn-g btn-full" onclick="rQuiz()">Back to Quiz Home</button>
+      ${QS.results.wrong>0?`<button class="btn-s btn-full" onclick="startQuiz('wrong')">Re-quiz ${QS.results.wrong} wrong answers</button>`:''}
+      <button class="btn-s btn-full" onclick="startQuiz(QS.filter,QS.filterVal)">Try again (new shuffle)</button>
+    </div>
+  `;
+}
 
 // ═══════════════════════════════════════════
 // INIT
